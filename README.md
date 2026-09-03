@@ -1,25 +1,41 @@
-# MeshCore-Godot — Godot receiver for the MeshCore live link (planned)
+# MeshCore Godot
 
-The Godot-side receiver of the **MeshCore** ecosystem: will run a server
-inside the Godot editor (default port **18080**) and apply the scene streamed
-from the MeshCore Blender addon.
+Godot-side receiver for [MeshCore](https://github.com/BakaAkari/MeshCore) — the
+Blender-centric live-link ecosystem. Blender streams scene changes
+(transforms, meshes, deletes) over the MeshSync wire protocol (msProtocol 124)
+and this addon applies them straight into the edited scene tree.
 
-## Status: planned — not yet implemented
+Pure GDScript (Godot 4.4+): no GDExtension, no native builds.
 
-## Design sketch
+## Install
 
-- Wire protocol: MeshSync-compatible binary v124 (shared with MeshCore-Unity;
-  the Blender addon emits one protocol for all engines)
-- Language: **C#** (GDScript is too slow for bulk float-array parsing)
-- HTTP: minimal POST handler over `TcpListener` (the client sends plain
-  `POST /set|/delete|/fence` with binary bodies)
-- Coordinate mapping: Godot is right-handed Y-up — **no winding flip needed**
-  (unlike Unity's FLIP_FACES path); only a Blender Z-up → Y-up axis rotation
-- Scene apply: SetMessage → `Node3D` hierarchy + `ArrayMesh`;
-  DeleteMessage → node removal; SceneBegin/SceneEnd fence gating
-  (same session model as the Unity receiver)
+Copy `addons/meshcore/` into your project, then enable
+**Project → Plugins → MeshCore**. It starts an HTTP server on `0.0.0.0:18080`
+while the plugin is active.
 
-## Companion repositories
+## Usage
 
-- **MeshCore** — the Blender addon (core of the ecosystem)
-- **MeshCore-Unity** — reference receiver implementation
+1. Enable the plugin in Godot; open the scene you want to sync into.
+2. In Blender, enable the MeshCore addon and hit **Sync Now** (or auto-sync).
+3. Objects appear as `Node3D` hierarchies under the edited scene root,
+   with a `MeshInstance3D` child per mesh.
+
+## Coordinates
+
+The Blender exporter converts to the "unity_ref" convention, which matches
+Godot's right-handed Y-up space directly (no extra flips needed). Triangles
+arrive already wound for the receiver (split normals preserved).
+
+## Layout
+
+- `addons/meshcore/protocol.gd` — wire decoder (Set/Delete messages)
+- `addons/meshcore/server.gd` — minimal HTTP/1.1 server
+- `addons/meshcore/importer.gd` — scene-tree application
+- `addons/meshcore/plugin.gd` — editor plugin entry
+- `tests/` — headless unit + E2E tests (`godot --headless --script tests/...`)
+
+## Status
+
+Working: transforms, full mesh sync (split normals, UV0), deletes,
+hierarchy creation. Roadmap: materials, cameras, lights, incremental
+sync parity, Godot 4.x physics-shape helpers.
