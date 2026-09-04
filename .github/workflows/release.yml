@@ -21,6 +21,9 @@ jobs:
           [ -n "$VERSION" ] || VERSION="dev"
           mkdir -p dist staging
           cp -r addons staging/
+          # stamp the real version into plugin.cfg so the editor shows it
+          sed -i "s/^version=\".*\"/version=\"${VERSION}\"/" staging/addons/meshcore/plugin.cfg
+          grep '^version=' staging/addons/meshcore/plugin.cfg
           cd staging
           zip -r "../dist/MeshCore-Godot-${VERSION}.zip" addons \
             -x "**/__pycache__/*" -x "**/*.uid"
