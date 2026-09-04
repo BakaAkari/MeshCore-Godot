@@ -28,12 +28,12 @@ func _on_entities(entities: Array) -> void:
 	print("[MeshCore] applying to edited scene root: '%s'" % root.name)
 	importer.apply_entities(entities, root)
 	for e in entities:
-		var rel := e.path.trim_prefix("/")
-		var n := root.get_node_or_null(rel)
+		var rel: String = String(e.path).trim_prefix("/")
+		var n: Node = root.get_node_or_null(rel)
 		if n == null:
 			push_warning("[MeshCore]   apply FAILED, node missing after import: %s" % e.path)
 		else:
-			var mi := n.get_node_or_null("Mesh") if n is Node3D else null
+			var mi: Node = n.get_node_or_null("Mesh") if n is Node3D else null
 			print("[MeshCore]   apply OK: %s (node=%s, mesh=%s)" % [
 				e.path, n.get_class(), "yes" if mi else "no"])
 
