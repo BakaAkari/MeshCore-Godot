@@ -26,6 +26,27 @@ const MF_NORMALS := 1 << 6
 const MF_MATERIAL_IDS := 1 << 12
 const MF_UV0 := 1 << 24
 
+# CameraDataFlags (C++ bitfield bits)
+const CF_IS_ORTHO := 1 << 1
+const CF_FOV := 1 << 2
+const CF_NEAR := 1 << 3
+const CF_FAR := 1 << 4
+const CF_FOCAL := 1 << 5
+const CF_SENSOR := 1 << 6
+const CF_LENS_SHIFT := 1 << 7
+const CF_VIEW := 1 << 8
+const CF_PROJ := 1 << 9
+const CF_LAYER_MASK := 1 << 10
+
+# LightDataFlags (C++ bitfield bits)
+const LF_LIGHT_TYPE := 1 << 1
+const LF_SHADOW_TYPE := 1 << 2
+const LF_COLOR := 1 << 3
+const LF_INTENSITY := 1 << 4
+const LF_RANGE := 1 << 5
+const LF_SPOT_ANGLE := 1 << 6
+const LF_LAYER_MASK := 1 << 7
+
 class Reader:
 	var data: PackedByteArray
 	var pos := 0
@@ -114,7 +135,43 @@ static func parse_entity(r: Reader) -> Entity:
 	if tflags & TF_REFERENCE: r.s()
 	if e.type == ENTITY_MESH:
 		_parse_mesh(r, e)
+	elif e.type == ENTITY_CAMERA:
+		_parse_camera(r, e)
+	elif e.type == ENTITY_LIGHT:
+		_parse_light(r, e)
 	return e
+
+## Camera: Transform body + CameraDataFlags-gated fields. We don't apply
+## camera data in Godot yet, but we MUST consume the bytes or the stream
+## desyncs and every following entity fails to decode (the variant_call
+## p_offset errors seen in the editor).
+static func _parse_camera(r: Reader, _e: Entity) -> void:
+	var cd := r.u32()
+	r.u32()  # is_ortho (bool, always present)
+	if cd & CF_FOV: r.f32()
+	if cd & CF_NEAR: r.f32()
+	if cd & CF_FAR: r.f32()
+	if cd & CF_FOCAL: r.f32()
+	if cd & CF_SENSOR: r.f32(); r.f32()
+	if cd & CF_LENS_SHIFT: r.f32(); r.f32()
+	if cd & CF_VIEW:
+		for i in 16: r.f32()
+	if cd & CF_PROJ:
+		for i in 16: r.f32()
+	if cd & CF_LAYER_MASK: r.u32()
+
+## Light: Transform body + LightDataFlags-gated fields. Same consume-only
+## rationale as camera.
+static func _parse_light(r: Reader, _e: Entity) -> void:
+	var ld := r.u32()
+	if ld & LF_LIGHT_TYPE: r.i32()
+	if ld & LF_SHADOW_TYPE: r.i32()
+	if ld & LF_COLOR:
+		for i in 4: r.f32()
+	if ld & LF_INTENSITY: r.f32()
+	if ld & LF_RANGE: r.f32()
+	if ld & LF_SPOT_ANGLE: r.f32()
+	if ld & LF_LAYER_MASK: r.u32()
 
 static func _parse_mesh(r: Reader, e: Entity) -> void:
 	var mflags := r.u32()
