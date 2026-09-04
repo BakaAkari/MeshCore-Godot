@@ -1,0 +1,49 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build addon zip
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          [ -n "$VERSION" ] || VERSION="dev"
+          mkdir -p dist staging
+          cp -r addons staging/
+          cd staging
+          zip -r "../dist/MeshCore-Godot-${VERSION}.zip" addons \
+            -x "**/__pycache__/*" -x "**/*.uid"
+          cd ..
+          ls -la dist/
+
+      - name: Inspect zip layout
+        run: |
+          set -euo pipefail
+          ZIP=$(ls dist/MeshCore-Godot-*.zip)
+          python3 - "$ZIP" <<'PY'
+          import sys, zipfile
+          names = zipfile.ZipFile(sys.argv[1]).namelist()
+          assert "addons/meshcore/plugin.cfg" in names, names
+          assert "addons/meshcore/plugin.gd" in names, names
+          assert "addons/meshcore/server.gd" in names, names
+          assert not any("__pycache__" in n for n in names), names
+          print(f"zip OK: {len(names)} files")
+          PY
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/MeshCore-Godot-*.zip
+          generate_release_notes: true
