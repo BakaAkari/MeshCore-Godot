@@ -84,12 +84,17 @@ func _try_handle(p: Dictionary) -> bool:
 		elif low.begins_with("expect:") and low.contains("100"):
 			expect_continue = true
 	var body_start := h_end + 4
-	if expect_continue and not p.cont_sent:
-		# only send 100-continue once headers are in
-		p.peer.put_data(H_CONTINUE.to_utf8_buffer())
-		p.cont_sent = true
 	if buf.size() < body_start + content_len:
 		return false  # wait for the body
+	if expect_continue and not p.cont_sent:
+		# Only send 100-continue once the FULL BODY has arrived: Python's
+		# http.client blocks in getresponse() until it sees either the 100
+		# or the final response. Sending 100 while the body is still in
+		# flight lets our final 200 cross with the client's body upload —
+		# http.client raises ResponseNotReady, the client thinks the send
+		# failed, retries forever (infinite re-import loop + UI lag).
+		p.peer.put_data(H_CONTINUE.to_utf8_buffer())
+		p.cont_sent = true
 	var body := buf.slice(body_start, body_start + content_len)
 	_respond(p.peer, method, path, body)
 	return true
