@@ -50,14 +50,11 @@ func _apply_mesh(node: Node3D, e) -> void:
 	var nloop: int = e.indices.size()
 	var have_n: bool = e.normals.size() == nloop * 3
 	var have_uv: bool = e.uv0.size() == nloop * 2
-	# The Blender exporter marks every mesh FLIP_FACES (MeshSync refine
-	# semantics, targeting Unity's left-handed winding). Unity's server
-	# executes the flip in Mesh::refine(); we must do the same — but Godot
-	# is right-handed like Blender, so the correct execution is: consume
-	# the flag and KEEP Blender's original CCW winding (i.e. do NOT flip).
-	# Flipping here produces exactly the "normals inverted" look reported
-	# against Unity. Verified against BoxMesh ground truth: unflipped
-	# import scores 12/12 inward under the same geometric test as BoxMesh.
+	# Blender is RHS Z-up with CCW front faces; Godot is RHS Y-up -Z-forward
+	# with CW front faces. After we convert vertex positions (x, y, z) ->
+	# (x, z, -y), the original Blender CCW winding becomes CCW in Godot's
+	# screen-space too, which is BACK-facing. So we must reverse the fan
+	# order to match Godot's front-face convention.
 	var lverts := PackedVector3Array(); lverts.resize(nloop)
 	var lnorm := PackedVector3Array(); lnorm.resize(nloop)
 	var luv := PackedVector2Array(); luv.resize(nloop)
@@ -70,10 +67,10 @@ func _apply_mesh(node: Node3D, e) -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var fi: int = 0
 	for c in e.counts:
-		# reverse fan order vs the Unity-oriented triangle emission so the
-		# final winding matches Godot's front-face convention
+		# reverse fan order so the final winding matches Godot's front-face
+		# convention after the Z-up -> Y-up conversion
 		for k in c - 2:
-			for li in [fi + k + 2, fi + k + 1, fi]:
+			for li in [fi, fi + k + 1, fi + k + 2]:
 				if have_uv: st.set_uv(luv[li])
 				if have_n: st.set_normal(lnorm[li])
 				st.add_vertex(lverts[li])
