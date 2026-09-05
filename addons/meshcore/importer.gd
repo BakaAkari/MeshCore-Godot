@@ -1,11 +1,12 @@
 class_name MeshCoreImporter
-## Applies received entities into the scene tree. Coordinates arrive in
-## "unity_ref" convention (Blender RHS Z-up mirrored on X), which matches
-## Godot's RHS Y-up -Z-forward for position/rotation directly. Triangles
-## are already wound for the receiver (exporter flips faces via
-## refine_flags FLIP_FACES on the Blender side).
-## Normals/UVs are per-index (per-loop); points are per-vertex — we expand
-## to per-loop vertices and rebuild indices 0..N (fan triangulation).
+## Applies received entities into the scene tree. Blender sends raw Z-up
+## data; this importer converts to Godot Y-up -Z-forward using the same
+## formula as Unity's FlipYZ_ZUpCorrector:
+##   position: (x, y, z) -> (x, z, -y)
+##   quaternion: (x, y, z, w) -> (-x, -z, y, w)
+##   scale: (x, y, z) -> (x, z, y)
+##   mesh points/normals: same as position
+## Triangles keep Blender's CCW winding (no flip).
 
 var root_path: NodePath = ^"."
 
@@ -40,9 +41,14 @@ func _ensure(e, by_path: Dictionary, root: Node) -> Node3D:
 	return node
 
 func _apply_transform(node: Node3D, e) -> void:
-	node.position = e.pos
-	node.quaternion = e.rot
-	node.scale = e.scale
+	# Blender exporter sends raw Blender Z-up data. Convert to Godot Y-up
+	# -Z-forward using the same formula as Unity's FlipYZ_ZUpCorrector:
+	#   pos: (x, y, z) -> (x, z, -y)
+	#   quat: (x, y, z, w) -> (-x, -z, y, w)
+	#   scale: (x, y, z) -> (x, z, y)
+	node.position = Vector3(e.pos.x, e.pos.z, -e.pos.y)
+	node.quaternion = Quaternion(-e.rot.x, -e.rot.z, e.rot.y, e.rot.w)
+	node.scale = Vector3(e.scale.x, e.scale.z, e.scale.y)
 	node.visible = e.visible
 
 func _apply_mesh(node: Node3D, e) -> void:
@@ -63,8 +69,9 @@ func _apply_mesh(node: Node3D, e) -> void:
 	var luv := PackedVector2Array(); luv.resize(nloop)
 	for li in nloop:
 		var vi: int = e.indices[li]
-		lverts[li] = Vector3(e.points[vi*3], e.points[vi*3+1], e.points[vi*3+2])
-		if have_n: lnorm[li] = Vector3(e.normals[li*3], e.normals[li*3+1], e.normals[li*3+2])
+		# Blender Z-up -> Godot Y-up: (x, y, z) -> (x, z, -y)
+		lverts[li] = Vector3(e.points[vi*3], e.points[vi*3+2], -e.points[vi*3+1])
+		if have_n: lnorm[li] = Vector3(e.normals[li*3], e.normals[li*3+2], -e.normals[li*3+1])
 		if have_uv: luv[li] = Vector2(e.uv0[li*2], e.uv0[li*2+1])
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
