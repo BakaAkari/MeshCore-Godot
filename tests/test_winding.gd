@@ -7,7 +7,7 @@ var server := MeshCoreServer.new()
 var importer := MeshCoreImporter.new()
 var root3d := Node3D.new()
 var phase := 0
-var sent_paths := ["/Cube"]
+var sent_paths := ["/WindingCube"]
 
 func _face_normal(v0: Vector3, v1: Vector3, v2: Vector3) -> Vector3:
 	return (v1 - v0).cross(v2 - v0).normalized()
@@ -57,7 +57,7 @@ func _init() -> void:
 
 func _on_entities(entities: Array) -> void:
 	importer.apply_entities(entities, root3d)
-	var n := root3d.get_node_or_null("Cube")
+	var n := root3d.get_node_or_null("WindingCube")
 	if n == null:
 		print("[PROBE] node missing"); quit(1); return
 	var mi := n.get_node_or_null("Mesh")
