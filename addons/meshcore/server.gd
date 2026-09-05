@@ -39,7 +39,6 @@ func poll() -> void:
 	while _server.is_connection_available():
 		_peers.append({"peer": _server.take_connection(),
 			"buf": PackedByteArray(), "cont_sent": false})
-		print("[MeshCore] client connected (%d)" % _peers.size())
 	var keep: Array[Dictionary] = []
 	for p in _peers:
 		var peer: StreamPeerTCP = p.peer
