@@ -5,6 +5,7 @@ var server: MeshCoreServer
 var importer := MeshCoreImporter.new()
 var _updater := MeshCoreUpdater.new()
 var _update_btn: Button
+var _no_scene_warned := false
 
 func _enter_tree() -> void:
 	server = MeshCoreServer.new()
@@ -74,11 +75,18 @@ func _on_entities(entities: Array) -> void:
 	# (one TCP connection per message, 4 messages per sync pass) it printed
 	# thousands of lines per second and froze the editor Output panel.
 	# One summary line per batch is kept; failures still push_warning.
-	print("[MeshCore] received %d entities" % entities.size())
 	var root := get_editor_interface().get_edited_scene_root()
 	if root == null:
-		push_warning("[MeshCore] NO SCENE OPEN in the editor — %d entities DISCARDED. Open/create a scene in the editor, then sync again." % entities.size())
+		# Batches keep arriving while auto-sync is live (dragging,
+		# animation, drivers) — warn ONCE per no-scene stretch, not per
+		# batch, or a closed scene alone floods the log again. The flag
+		# resets when a scene is opened so the next stretch re-warns.
+		if not _no_scene_warned:
+			_no_scene_warned = true
+			push_warning("[MeshCore] no scene open in the editor — incoming entities are being DISCARDED (warning shown once until a scene is opened). Open/create a scene to receive syncs.")
 		return
+	_no_scene_warned = false
+	print("[MeshCore] received %d entities" % entities.size())
 	print("[MeshCore] applying to edited scene root: '%s'" % root.name)
 	importer.apply_entities(entities, root)
 	for e in entities:
@@ -88,9 +96,12 @@ func _on_entities(entities: Array) -> void:
 			push_warning("[MeshCore]   apply FAILED, node missing after import: %s" % e.path)
 
 func _on_deletes(paths: Array) -> void:
-	print("[MeshCore] received %d deletes" % paths.size())
 	var root := get_editor_interface().get_edited_scene_root()
 	if root == null:
-		push_warning("[MeshCore] NO SCENE OPEN in the editor — %d deletes DISCARDED." % paths.size())
+		if not _no_scene_warned:
+			_no_scene_warned = true
+			push_warning("[MeshCore] no scene open in the editor — incoming entities/deletes are being DISCARDED (warning shown once until a scene is opened).")
 		return
+	_no_scene_warned = false
+	print("[MeshCore] received %d deletes" % paths.size())
 	importer.apply_deletes(paths, root)
