@@ -37,8 +37,9 @@ func _on_entities(entities: Array) -> void:
 		quit(1)
 		return
 	# Expected: Blender 30deg about Z -> Godot 30deg about Y
-	# Blender quat (w=0.9659, x=0, y=0, z=0.2588) -> Godot (-0, -0.2588, 0, 0.9659)
-	var exp_quat := Quaternion(0.0, -0.2588, 0.0, 0.9659)
+	# Blender quat (x=0, y=0, z=0.2588, w=0.9659) mapped by C -> (x, z, -y, w)
+	# = (0, 0.2588, 0, 0.9659) [NOT (-x,-z,y,w); that is a different rotation]
+	var exp_quat := Quaternion(0.0, 0.2588, 0.0, 0.9659)
 	if n.quaternion.dot(exp_quat) < 0.999:
 		print("[PROBE] FAIL quat expected=", exp_quat, " got=", n.quaternion)
 		quit(1)

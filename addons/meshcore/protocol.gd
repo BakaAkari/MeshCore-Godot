@@ -109,9 +109,19 @@ static func parse_set_body(r: Reader) -> Dictionary:
 	r.u64()  # validation_hash
 	var data_flags := r.u32()
 	var scene := {"session_id": session_id, "entities": [] as Array[Entity]}
+	scene["handedness"] = 0
+	scene["scale_factor"] = 1.0
 	if data_flags & 1:  # settings
-		r.i32()  # handedness
-		r.f32()  # scale_factor
+		# Scene settings were previously discarded. We now retain the two
+		# fields (handedness + scale_factor) in the parsed dict for diagnostics,
+		# but they are NOT enforced at runtime: the only supported wire contract
+		# is RightZUp (handedness=3) with scale_factor=1.0 (the Blender exporter
+		# hardcodes both), and the importer's fixed Z-up->Y-up basis change is
+		# the handling of RightZUp. A scale_factor of 1.0 has no effect, so it
+		# cannot cause double conversion; non-1.0 scaling is outside the current
+		# contract and is intentionally left for a future pass.
+		scene["handedness"] = r.i32()  # handedness
+		scene["scale_factor"] = r.f32()  # scale_factor
 	if data_flags & (1 << 2):  # entities
 		var n := r.u32()
 		for i in n:

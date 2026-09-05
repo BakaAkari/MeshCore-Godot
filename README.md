@@ -22,9 +22,20 @@ while the plugin is active.
 
 ## Coordinates
 
-The Blender exporter converts to the "unity_ref" convention, which matches
-Godot's right-handed Y-up space directly (no extra flips needed). Triangles
-arrive already wound for the receiver (split normals preserved).
+Blender streams raw Z-up data (scene handedness `RightZUp`, `scale_factor=1`).
+This addon converts to Godot's right-handed Y-up -Z-forward space with the same
+linear basis change C used by Unity's `FlipYZ_ZUpCorrector`:
+- position/normal: `(x, y, z) -> (x, z, -y)`
+- quaternion: `(x, y, z, w) -> (x, z, -y, w)` (conjugated by C; NOT `(-x,-z,y,w)`)
+- scale: `(x, y, z) -> (x, z, y)`
+
+C is a proper rotation (det +1), so the coordinate change itself adds no
+reflection. It does not remove the mesh's winding policy: the importer
+**reverses** Blender's CCW polygons into Godot CW front faces (matching Godot's
+BoxMesh, which scores 12/12 inward on a centered box cross-dot). Transforms are
+written as absolute per-node local values so incremental (transform-only)
+updates are idempotent. `handedness`/`scale_factor` are retained for
+diagnostics but not runtime-enforced (contract is fixed RightZUp, scale=1).
 
 ## Layout
 

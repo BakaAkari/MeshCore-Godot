@@ -1,12 +1,16 @@
 class_name MeshCoreImporter
-## Applies received entities into the scene tree. Blender sends raw Z-up
-## data; this importer converts to Godot Y-up -Z-forward using the same
-## formula as Unity's FlipYZ_ZUpCorrector:
-##   position: (x, y, z) -> (x, z, -y)
-##   quaternion: (x, y, z, w) -> (-x, -z, y, w)
-##   scale: (x, y, z) -> (x, z, y)
+## Applies received entities into the scene tree. Blender sends raw Z-up data
+## (scene handedness RightZUp); this importer converts to Godot Y-up -Z-forward
+## with the basis change C (same linear part as Unity's FlipYZ_ZUpCorrector):
+##   position:    (x, y, z) -> (x, z, -y)
+##   quaternion:  (x, y, z, w) -> (x, z, -y, w)   # conjugated by C
+##   scale:       (x, y, z) -> (x, z, y)
 ##   mesh points/normals: same as position
-## Triangles keep Blender's CCW winding (no flip).
+## C is a proper rotation (det +1), so the COORDINATE change itself does not
+## add a reflection. It does not, however, remove the mesh's winding policy:
+## the fan below deliberately REVERSES Blender's CCW polygons into Godot CW
+## (the exporter also sets FLIP_FACES for Unity's left-handed refine). Godot
+## needs CW front faces, matching BoxMesh's own 12/12 inward cross-dot score.
 
 var root_path: NodePath = ^"."
 
@@ -42,12 +46,13 @@ func _ensure(e, by_path: Dictionary, root: Node) -> Node3D:
 
 func _apply_transform(node: Node3D, e) -> void:
 	# Blender exporter sends raw Blender Z-up data. Convert to Godot Y-up
-	# -Z-forward using the same formula as Unity's FlipYZ_ZUpCorrector:
+	# -Z-forward via the basis change C: X->X, Y->-Z, Z->Y.
 	#   pos: (x, y, z) -> (x, z, -y)
-	#   quat: (x, y, z, w) -> (-x, -z, y, w)
+	#   quat: conjugated by C -> (x, z, -y, w)   [NOT (-x,-z,y,w); verified in
+	#         Blender mathutils: 30deg-Z gives matrix error 1.0 under the old map]
 	#   scale: (x, y, z) -> (x, z, y)
 	node.position = Vector3(e.pos.x, e.pos.z, -e.pos.y)
-	node.quaternion = Quaternion(-e.rot.x, -e.rot.z, e.rot.y, e.rot.w)
+	node.quaternion = Quaternion(e.rot.x, e.rot.z, -e.rot.y, e.rot.w)
 	node.scale = Vector3(e.scale.x, e.scale.z, e.scale.y)
 	node.visible = e.visible
 
@@ -56,14 +61,13 @@ func _apply_mesh(node: Node3D, e) -> void:
 	var nloop: int = e.indices.size()
 	var have_n: bool = e.normals.size() == nloop * 3
 	var have_uv: bool = e.uv0.size() == nloop * 2
-	# The Blender exporter marks every mesh FLIP_FACES (MeshSync refine
-	# semantics, targeting Unity's left-handed winding). Unity's server
-	# executes the flip in Mesh::refine(); we must do the same — but Godot
-	# is right-handed like Blender, so the correct execution is: consume
-	# the flag and KEEP Blender's original CCW winding (i.e. do NOT flip).
-	# Flipping here produces exactly the "normals inverted" look reported
-	# against Unity. Verified against BoxMesh ground truth: unflipped
-	# import scores 12/12 inward under the same geometric test as BoxMesh.
+	# The Blender exporter sends CCW polygons (Blender is right-handed) and marks
+	# every mesh FLIP_FACES (MeshSync refine semantics, targeting Unity's
+	# left-handed winding, which Unity's native Mesh::refine() executes).
+	# Godot uses CW front faces (its centered BoxMesh scores 12/12 inward
+	# under the geometric cross-dot-outward test). The fan below reverses
+	# Blender's CCW polygons into Godot CW. The coordinate change C has
+	# det +1 and adds no reflection; preserve this reversed fan.
 	var lverts := PackedVector3Array(); lverts.resize(nloop)
 	var lnorm := PackedVector3Array(); lnorm.resize(nloop)
 	var luv := PackedVector2Array(); luv.resize(nloop)
@@ -77,8 +81,8 @@ func _apply_mesh(node: Node3D, e) -> void:
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var fi: int = 0
 	for c in e.counts:
-		# reverse fan order vs the Unity-oriented triangle emission so the
-		# final winding matches Godot's front-face convention
+		# Fan (fi+k+2, fi+k+1, fi) is the REVERSE of Blender's CCW fan
+		# (fi, fi+k+1, fi+k+2): this turns CCW into Godot's CW front faces.
 		for k in c - 2:
 			for li in [fi + k + 2, fi + k + 1, fi]:
 				if have_uv: st.set_uv(luv[li])
